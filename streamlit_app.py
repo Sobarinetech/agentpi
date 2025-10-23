@@ -1,39 +1,43 @@
 import streamlit as st
 import requests
 
-# --- Page Configuration ---
+# --- Streamlit Page Configuration ---
 st.set_page_config(
     page_title="AgentPI API Runner",
-    page_icon="⚙️",
+    page_icon="🤖",
     layout="centered",
 )
 
-# --- Header ---
-st.title("⚙️ AgentPI API Runner")
+# --- App Header ---
+st.title("🤖 AgentPI API Runner")
 st.caption("Interact securely with your Supabase Edge Function (`agentpi-api`).")
 
-# --- Load Credentials ---
+# --- Load Secrets ---
 try:
     supabase_url = st.secrets["supabase"]["url"]
-    user_token = st.secrets["supabase"]["access_token"]
+    user_token = st.secrets["supabase"]["user_token"]
 
     if not supabase_url or not user_token or "supabase.co" not in supabase_url:
-        st.error("❌ Supabase credentials are not configured correctly in `st.secrets`.")
-        st.info("Please create a `.streamlit/secrets.toml` file with your Supabase URL and Access Token.")
+        st.error("❌ Supabase credentials are missing or misconfigured in `.streamlit/secrets.toml`.")
         st.stop()
-except (KeyError, FileNotFoundError):
-    st.error("❌ Secrets file not found or misconfigured.")
-    st.info("Please create a `.streamlit/secrets.toml` file as per setup instructions.")
+except Exception as e:
+    st.error(f"⚠️ Error loading secrets: {e}")
+    st.info("Please ensure `.streamlit/secrets.toml` exists and contains the required fields.")
     st.stop()
 
-# --- API Call Function ---
+# --- Constants ---
+SUPABASE_API_KEY = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlieWFrenh4eGlnYXhneWhtdXRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEwNTU2NDIsImV4cCI6MjA3NjYzMTY0Mn0."
+    "EnhWQjiEqEFxA0j6XxTdCbLFynRHvWxt0NfYo7AHaYo"
+)
+
+# --- Function to Call the API ---
 def call_agentpi_api(api_id: str, user_message: str):
-    """
-    Calls the agentpi-api edge function using credentials from st.secrets.
-    """
-    endpoint = f"{supabase_url}/functions/v1/agentpi-api"
+    url = f"{supabase_url}/functions/v1/agentpi-api"
     headers = {
         "Authorization": f"Bearer {user_token}",
+        "apikey": SUPABASE_API_KEY,
         "Content-Type": "application/json"
     }
     data = {
@@ -48,46 +52,45 @@ def call_agentpi_api(api_id: str, user_message: str):
 
     try:
         with st.spinner("🔄 Contacting AgentPI API..."):
-            response = requests.post(endpoint, json=data, headers=headers)
+            response = requests.post(url, json=data, headers=headers)
             response.raise_for_status()
             result = response.json()
 
         if result.get("success"):
-            st.success("✅ Request successful!")
-            st.subheader("AI Response")
+            st.success("✅ API call successful!")
+            st.subheader("🧠 AI Response")
             st.write(result["data"].get("response", "No response field found."))
 
             st.subheader("📊 API Calls")
             st.json(result["data"].get("apiCalls", {}))
         else:
-            st.error("⚠️ API Error")
+            st.error("⚠️ API returned an error:")
             st.write(result.get("message", "Unknown error."))
 
     except requests.exceptions.RequestException as e:
         st.error(f"❌ Request failed: {e}")
         if e.response is not None:
             try:
-                error_detail = e.response.json()
-                st.error(f"Error details: {error_detail.get('error', 'No details provided.')}")
+                st.json(e.response.json())
             except Exception:
-                pass
+                st.error("Failed to parse error response.")
     except Exception as e:
         st.error(f"⚠️ Unexpected error: {e}")
 
-# --- User Interface ---
+# --- Streamlit Form for User Input ---
 with st.form("agentpi_form"):
     api_id = st.text_input(
         "API ID",
         value="your-api-id",
-        help="Enter the API ID configured in your AgentPI environment."
+        help="Enter the API ID you configured in Supabase AgentPI."
     )
     user_message = st.text_area(
-        "User Message",
+        "Your Message",
         value="Fetch all active users",
         height=120,
-        help="Enter a natural language command to send to the AgentPI function."
+        help="Enter a natural language instruction to send to the AgentPI function."
     )
-    submitted = st.form_submit_button("🚀 Run API Call")
+    submitted = st.form_submit_button("🚀 Send to AgentPI")
 
 if submitted:
     if not api_id.strip() or api_id == "your-api-id":
@@ -100,15 +103,14 @@ if submitted:
 # --- Instructions ---
 with st.expander("ℹ️ How to use this app"):
     st.markdown("""
-    **Usage Steps:**
-    1. 🔐 Configure your Supabase credentials in `.streamlit/secrets.toml`.
-    2. 🧩 Enter your AgentPI `apiId` (from Supabase or your project config).
-    3. 💬 Type a message or instruction (e.g., “Fetch all active users”).
-    4. 🚀 Click **Run API Call** to send the request.
-    5. 📦 View the structured JSON response below.
+    **Steps to Use:**
+    1. 🔐 Create a `.streamlit/secrets.toml` file with your Supabase URL and `user_token`.
+    2. 🧩 Enter your AgentPI `apiId` (from your Supabase project setup).
+    3. 💬 Enter a command or query (e.g., “Fetch all active users”).
+    4. 🚀 Click **Send to AgentPI** to execute the request.
+    5. 📦 View the AI’s response and any API calls below.
     
     ---
-    **Security Note:**  
-    Your credentials are securely loaded via `st.secrets` and never exposed in code or logs.
+    **Security Tip:**  
+    Your credentials are loaded via `st.secrets` and never stored or logged in plain text.
     """)
-
