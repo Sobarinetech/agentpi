@@ -1,53 +1,47 @@
 import streamlit as st
 import requests
 
-# --- Streamlit Page Configuration ---
+# --- Page Configuration ---
 st.set_page_config(
     page_title="AgentPI API Runner",
     page_icon="🤖",
     layout="centered",
 )
 
-# --- App Header ---
+# --- Header ---
 st.title("🤖 AgentPI API Runner")
 st.caption("Interact securely with your Supabase Edge Function (`agentpi-api`).")
 
-# --- Load Secrets ---
+# --- Load Credentials ---
 try:
-    supabase_url = st.secrets["supabase"]["url"]
+    supabase_url = st.secrets["supabase"]["url"].rstrip("/")  # remove trailing slash if any
     user_token = st.secrets["supabase"]["user_token"]
-
-    if not supabase_url or not user_token or "supabase.co" not in supabase_url:
-        st.error("❌ Supabase credentials are missing or misconfigured in `.streamlit/secrets.toml`.")
-        st.stop()
 except Exception as e:
     st.error(f"⚠️ Error loading secrets: {e}")
-    st.info("Please ensure `.streamlit/secrets.toml` exists and contains the required fields.")
     st.stop()
 
-# --- Constants ---
+if not supabase_url.startswith("https://") or not user_token:
+    st.error("❌ Invalid Supabase URL or user token.")
+    st.stop()
+
+# --- Constant API Key (from your example) ---
 SUPABASE_API_KEY = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
     "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlieWFrenh4eGlnYXhneWhtdXRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEwNTU2NDIsImV4cCI6MjA3NjYzMTY0Mn0."
     "EnhWQjiEqEFxA0j6XxTdCbLFynRHvWxt0NfYo7AHaYo"
 )
 
-# --- Function to Call the API ---
+# --- API Call Function ---
 def call_agentpi_api(api_id: str, user_message: str):
-    url = f"{supabase_url}/functions/v1/agentpi-api"
+    url = f"{supabase_url}/functions/v1/agentpi-api"  # ✅ correct endpoint
     headers = {
         "Authorization": f"Bearer {user_token}",
         "apikey": SUPABASE_API_KEY,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
     data = {
         "apiId": api_id,
-        "messages": [
-            {
-                "role": "user",
-                "content": user_message
-            }
-        ]
+        "messages": [{"role": "user", "content": user_message}],
     }
 
     try:
@@ -77,19 +71,10 @@ def call_agentpi_api(api_id: str, user_message: str):
     except Exception as e:
         st.error(f"⚠️ Unexpected error: {e}")
 
-# --- Streamlit Form for User Input ---
+# --- Form UI ---
 with st.form("agentpi_form"):
-    api_id = st.text_input(
-        "API ID",
-        value="your-api-id",
-        help="Enter the API ID you configured in Supabase AgentPI."
-    )
-    user_message = st.text_area(
-        "Your Message",
-        value="Fetch all active users",
-        height=120,
-        help="Enter a natural language instruction to send to the AgentPI function."
-    )
+    api_id = st.text_input("API ID", "your-api-id")
+    user_message = st.text_area("Your Message", "Fetch all active users", height=120)
     submitted = st.form_submit_button("🚀 Send to AgentPI")
 
 if submitted:
@@ -100,17 +85,19 @@ if submitted:
     else:
         call_agentpi_api(api_id, user_message)
 
-# --- Instructions ---
+# --- Help Section ---
 with st.expander("ℹ️ How to use this app"):
     st.markdown("""
-    **Steps to Use:**
-    1. 🔐 Create a `.streamlit/secrets.toml` file with your Supabase URL and `user_token`.
-    2. 🧩 Enter your AgentPI `apiId` (from your Supabase project setup).
-    3. 💬 Enter a command or query (e.g., “Fetch all active users”).
-    4. 🚀 Click **Send to AgentPI** to execute the request.
-    5. 📦 View the AI’s response and any API calls below.
-    
-    ---
-    **Security Tip:**  
-    Your credentials are loaded via `st.secrets` and never stored or logged in plain text.
+    **Setup:**
+    1. Add your Supabase credentials in `.streamlit/secrets.toml`:
+       ```toml
+       [supabase]
+       url = "https://<your-project>.supabase.co"
+       user_token = "YOUR_TOKEN"
+       ```
+    2. Run:
+       ```bash
+       streamlit run app.py
+       ```
+    3. Enter your API ID and message, then click **Send**.
     """)
