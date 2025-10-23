@@ -7,8 +7,10 @@ import time
 # Load configuration from st.secrets. Provide safe defaults for initial setup.
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", "https://your-project.supabase.co")
 SUPABASE_ANON_KEY = st.secrets.get("SUPABASE_ANON_KEY", "your-anon-key")
-# Assuming the function is named 'agentpi', adjust if yours is different.
-EDGE_FUNCTION_URL = st.secrets.get("EDGE_FUNCTION_URL", f"{SUPABASE_URL}/functions/v1/agentpi") 
+
+# Set the function name based on your secrets file for better clarity (agentpi-chat)
+FUNCTION_NAME = "agentpi-chat" 
+EDGE_FUNCTION_URL = st.secrets.get("EDGE_FUNCTION_URL", f"{SUPABASE_URL}/functions/v1/{FUNCTION_NAME}") 
 
 MAX_RETRIES = 3
 INITIAL_BACKOFF = 1 # seconds
@@ -207,4 +209,5 @@ if prompt := st.chat_input("Ask AgentPI a question or command, e.g., 'What is th
                             api_details_markdown += f"- **Response Body Preview:**\n```text\n{body_preview}\n```"
                         else:
                             body_preview = json.dumps(body_display, indent=2)
+                            # Fix the incomplete line from the original snippet
                             api_details_markdown += f"- **Response Body Preview:**\n"
