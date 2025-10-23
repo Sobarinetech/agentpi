@@ -1,103 +1,93 @@
 import streamlit as st
 import requests
+import json
 
-# --- Page Configuration ---
+# ----------------------------
+# CONFIGURATION
+# ----------------------------
 st.set_page_config(
-    page_title="AgentPI API Runner",
+    page_title="AgentPI Dashboard",
     page_icon="🤖",
-    layout="centered",
+    layout="wide"
 )
 
-# --- Header ---
-st.title("🤖 AgentPI API Runner")
-st.caption("Interact securely with your Supabase Edge Function (`agentpi-api`).")
+st.title("🤖 AgentPI – AI API Orchestrator")
 
-# --- Load Credentials ---
-try:
-    supabase_url = st.secrets["supabase"]["url"].rstrip("/")  # remove trailing slash if any
-    user_token = st.secrets["supabase"]["user_token"]
-except Exception as e:
-    st.error(f"⚠️ Error loading secrets: {e}")
+# Load your Supabase project info
+SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"  # Replace with your project URL
+SUPABASE_FUNCTION = f"{SUPABASE_URL}/functions/v1/agentpi-api"
+
+# You can load from st.secrets in production
+USER_TOKEN = st.secrets.get("supabase", {}).get("user_token", "")
+API_KEY = st.secrets.get("supabase", {}).get("apikey", "")
+
+if not USER_TOKEN or not API_KEY:
+    st.warning("⚠️ Missing credentials. Add them to your Streamlit secrets.toml.")
     st.stop()
 
-if not supabase_url.startswith("https://") or not user_token:
-    st.error("❌ Invalid Supabase URL or user token.")
-    st.stop()
+# ----------------------------
+# SIDEBAR CONFIG
+# ----------------------------
+st.sidebar.header("🔧 Configuration")
 
-# --- Constant API Key (from your example) ---
-SUPABASE_API_KEY = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlieWFrenh4eGlnYXhneWhtdXRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEwNTU2NDIsImV4cCI6MjA3NjYzMTY0Mn0."
-    "EnhWQjiEqEFxA0j6XxTdCbLFynRHvWxt0NfYo7AHaYo"
-)
+api_id = st.sidebar.text_input("API ID", value="your-api-id")
+api_name = st.sidebar.text_input("API Name (optional)")
+message = st.text_area("💬 Message", "Fetch all active users")
 
-# --- API Call Function ---
-def call_agentpi_api(api_id: str, user_message: str):
-    url = f"{supabase_url}/functions/v1/agentpi-api"  # ✅ correct endpoint
-    headers = {
-        "Authorization": f"Bearer {user_token}",
-        "apikey": SUPABASE_API_KEY,
-        "Content-Type": "application/json",
-    }
-    data = {
-        "apiId": api_id,
-        "messages": [{"role": "user", "content": user_message}],
-    }
+if st.button("🚀 Run AI Agent"):
+    with st.spinner("Processing your request..."):
+        url = SUPABASE_FUNCTION
+        headers = {
+            "Authorization": f"Bearer {USER_TOKEN}",
+            "apikey": API_KEY,
+            "Content-Type": "application/json",
+        }
 
-    try:
-        with st.spinner("🔄 Contacting AgentPI API..."):
-            response = requests.post(url, json=data, headers=headers)
-            response.raise_for_status()
+        payload = {
+            "apiId": api_id if api_id else None,
+            "apiName": api_name if api_name else None,
+            "messages": [
+                {"role": "user", "content": message}
+            ]
+        }
+
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()  # Raise HTTPError for 4xx/5xx
+
             result = response.json()
+            if result.get("success"):
+                st.success("✅ AI Response Received")
 
-        if result.get("success"):
-            st.success("✅ API call successful!")
-            st.subheader("🧠 AI Response")
-            st.write(result["data"].get("response", "No response field found."))
+                st.subheader("🧠 AI Response")
+                st.write(result["data"]["response"])
 
-            st.subheader("📊 API Calls")
-            st.json(result["data"].get("apiCalls", {}))
-        else:
-            st.error("⚠️ API returned an error:")
-            st.write(result.get("message", "Unknown error."))
+                st.subheader("📡 API Call Summary")
+                api_calls = result["data"].get("apiCalls", [])
+                if api_calls:
+                    for call in api_calls:
+                        st.json(call)
+                else:
+                    st.info("No API calls were made by the AI agent.")
 
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Request failed: {e}")
-        if e.response is not None:
-            try:
-                st.json(e.response.json())
-            except Exception:
-                st.error("Failed to parse error response.")
-    except Exception as e:
-        st.error(f"⚠️ Unexpected error: {e}")
+                st.subheader("ℹ️ Metadata")
+                st.json(result.get("metadata", {}))
 
-# --- Form UI ---
-with st.form("agentpi_form"):
-    api_id = st.text_input("API ID", "your-api-id")
-    user_message = st.text_area("Your Message", "Fetch all active users", height=120)
-    submitted = st.form_submit_button("🚀 Send to AgentPI")
+            else:
+                st.error(f"❌ Error: {result.get('message', 'Unknown error')}")
+                st.json(result)
 
-if submitted:
-    if not api_id.strip() or api_id == "your-api-id":
-        st.warning("Please enter a valid API ID.")
-    elif not user_message.strip():
-        st.warning("Please enter a message.")
-    else:
-        call_agentpi_api(api_id, user_message)
+        except requests.exceptions.HTTPError as e:
+            st.error(f"HTTP Error: {e.response.status_code} - {e.response.text}")
+        except requests.exceptions.ConnectionError:
+            st.error("❌ Connection Error: Could not reach Supabase Edge Function.")
+        except requests.exceptions.Timeout:
+            st.error("⏳ Timeout Error: The request took too long.")
+        except Exception as e:
+            st.error(f"⚠️ Unexpected error: {e}")
 
-# --- Help Section ---
-with st.expander("ℹ️ How to use this app"):
-    st.markdown("""
-    **Setup:**
-    1. Add your Supabase credentials in `.streamlit/secrets.toml`:
-       ```toml
-       [supabase]
-       url = "https://<your-project>.supabase.co"
-       user_token = "YOUR_TOKEN"
-       ```
-    2. Run:
-       ```bash
-       streamlit run app.py
-       ```
-    3. Enter your API ID and message, then click **Send**.
-    """)
+# ----------------------------
+# FOOTER
+# ----------------------------
+st.markdown("---")
+st.caption("Powered by Supabase Edge Functions + Gemini + Streamlit 💡")
