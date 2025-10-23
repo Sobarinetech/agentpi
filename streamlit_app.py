@@ -207,4 +207,4 @@ if prompt := st.chat_input("Ask AgentPI a question or command, e.g., 'What is th
                             api_details_markdown += f"- **Response Body Preview:**\n```text\n{body_preview}\n```"
                         else:
                             body_preview = json.dumps(body_display, indent=2)
-                            api_details_markdown += f"- **Response Body Preview:**\n
+                            api_details_markdown += f"- **Response Body Preview:**\n"
