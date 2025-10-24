@@ -1,85 +1,73 @@
 import streamlit as st
 import requests
 
-# Set page configuration
-st.set_page_config(
-    page_title="Hush API Interaction",
-    layout="centered"
-)
+st.set_page_config(page_title="Hush API Chat", page_icon="🕵️", layout="centered")
 
-# --- Constants from the original script ---
-API_URL = 'https://avdqcbeyygoeagrmcqcl.supabase.co/functions/v1/agent-api'
-CONTENT_TYPE = 'application/json'
+# --- Load secrets from Streamlit Cloud or .streamlit/secrets.toml ---
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+AUTH_TOKEN = st.secrets["AUTH_TOKEN"]
 
-# --- Streamlit Title and Introduction ---
-st.title("🤖 Hush API Chatbot")
-st.markdown("Enter your message to interact with the Hush API. The API key is securely loaded from `st.secrets`.")
+# --- Setup ---
+headers = {
+    "Authorization": f"Bearer {AUTH_TOKEN}",
+    "Content-Type": "application/json",
+}
 
-# --- API Key Retrieval ---
-try:
-    # Retrieve the authentication token from st.secrets
-    AUTH_TOKEN = st.secrets["hush_api"]["auth_token"]
-except (KeyError, AttributeError):
-    st.error("🚨 API authentication token not found in `st.secrets`. Please configure `secrets.toml`.")
-    st.stop() # Stop the app if the secret isn't available
+# --- Initialize conversation state ---
+if "conversation_history" not in st.session_state:
+    st.session_state.conversation_history = []
+if "chat_log" not in st.session_state:
+    st.session_state.chat_log = []
 
-# --- User Input ---
-user_message = st.text_area(
-    "Your Message:",
-    placeholder="e.g., Use flask to extract this PDF: https://example.com/doc.pdf",
-    height=150
-)
+st.title("🕵️ Hush API Chat")
+st.caption("Interact with your Supabase Edge Function")
 
-# --- Function to Call API ---
-@st.spinner("Sending message and awaiting response...")
-def call_hush_api(message):
-    """Sends the message to the Hush API and returns the response."""
-    
-    # Define headers using the retrieved token
-    headers = {
-        'Authorization': f'Bearer {AUTH_TOKEN}',
-        'Content-Type': CONTENT_TYPE
-    }
-    
-    # Define the payload
-    # Note: 'conversationHistory' is kept as an empty list as per the original script
+# --- Input form ---
+with st.form("chat_form", clear_on_submit=True):
+    user_input = st.text_area("Enter your message", height=100, placeholder="Type something like: Use Flask to extract this PDF...")
+    submitted = st.form_submit_button("Send")
+
+# --- Function to send message ---
+def send_message(msg):
     data = {
-        'message': message,
-        'conversationHistory': []
+        "message": msg,
+        "conversationHistory": st.session_state.conversation_history,
     }
-    
+
     try:
-        # Make the POST request
-        response = requests.post(API_URL, headers=headers, json=data)
-        response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
-        
+        response = requests.post(SUPABASE_URL, json=data, headers=headers)
         result = response.json()
-        
-        # Check if the expected 'response' key exists in the JSON result
-        if 'response' in result:
-            return result['response']
+
+        if "response" in result:
+            # Append to session state
+            st.session_state.conversation_history.append({"role": "assistant", "content": result["response"]})
+            return result["response"]
         else:
-            return f"API call successful, but the expected 'response' key was missing. Full result: {result}"
-
-    except requests.exceptions.HTTPError as e:
-        return f"HTTP Error: {e}. Status Code: {response.status_code}. Response: {response.text}"
-    except requests.exceptions.RequestException as e:
-        return f"An error occurred during the API request: {e}"
+            return f"❌ Error: {result}"
     except Exception as e:
-        return f"An unexpected error occurred: {e}"
+        return f"⚠️ Request failed: {e}"
 
-# --- Submit Button and Output ---
-if st.button("Send Message 🚀"):
-    if user_message:
-        # Call the API function
-        api_response = call_hush_api(user_message)
-        
-        # Display the result
-        st.subheader("API Response")
-        st.info(api_response)
+# --- Handle message send ---
+if submitted and user_input.strip():
+    st.session_state.chat_log.append(("You", user_input))
+    reply = send_message(user_input)
+    st.session_state.chat_log.append(("Hush", reply))
+
+# --- Display chat log ---
+for sender, msg in st.session_state.chat_log:
+    if sender == "You":
+        st.markdown(f"🧑 **{sender}:** {msg}")
     else:
-        st.warning("Please enter a message to send.")
+        st.markdown(f"🤖 **{sender}:** {msg}")
 
-# --- Optional: Display API URL for context ---
-st.markdown("---")
-st.caption(f"Target API: `{API_URL}`")
+# --- Sidebar ---
+st.sidebar.header("⚙️ Settings")
+st.sidebar.write("Supabase Edge Function URL:")
+st.sidebar.code(SUPABASE_URL)
+st.sidebar.write("Auth token is securely loaded from `st.secrets`.")
+
+st.sidebar.divider()
+if st.sidebar.button("🧹 Clear Conversation"):
+    st.session_state.conversation_history = []
+    st.session_state.chat_log = []
+    st.success("Conversation cleared!")
