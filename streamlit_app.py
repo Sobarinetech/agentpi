@@ -3,7 +3,7 @@ import requests
 import json
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Hush API Chat", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="Hush API Chat helpdesk's ", page_icon="🤖", layout="centered")
 
 # --- APP HEADER ---
 st.title("🤖 Hush API Chat")
