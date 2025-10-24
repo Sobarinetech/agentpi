@@ -8,7 +8,7 @@ st.set_page_config(
 )
 
 # --- Constants from the original script ---
-API_URL = 'https://kdikcecnfoqhzyoyizly.supabase.co/functions/v1/hush-api'
+API_URL = 'https://avdqcbeyygoeagrmcqcl.supabase.co/functions/v1/agent-api'
 CONTENT_TYPE = 'application/json'
 
 # --- Streamlit Title and Introduction ---
